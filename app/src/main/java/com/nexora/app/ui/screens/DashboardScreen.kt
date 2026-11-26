@@ -240,8 +240,8 @@ private fun ContinueCard(link: LinkEntity, color: Color, modifier: Modifier, onC
             Canvas(Modifier.matchParentSize()) {
                 drawCircle(Color.White.copy(alpha = 0.28f), radius = size.height * 0.55f, center = Offset(size.width * 0.85f, size.height * 0.15f))
             }
-            Box(Modifier.align(Alignment.Center).size(36.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) {
-                Icon(if (platform in VIDEO_PLATFORMS) Icons.Filled.PlayArrow else Icons.Outlined.Link, null, Modifier.size(20.dp), tint = Neon.ink)
+            Box(Modifier.align(Alignment.BottomEnd).padding(8.dp).size(34.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) {
+                Icon(if (platform in VIDEO_PLATFORMS) Icons.Filled.PlayArrow else Icons.Outlined.Link, null, Modifier.size(19.dp), tint = Neon.ink)
             }
             Text(
                 platform.label, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1,
