@@ -3,6 +3,7 @@ package com.nexora.app.ui.screens
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -170,7 +171,7 @@ private fun CategoryDialog(
     AlertDialog(
         onDismissRequest = onDismiss, shape = Radius.card, title = { Text(title) },
         text = {
-            Column {
+            Column(Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState())) {
                 OutlinedTextField(
                     value = name, onValueChange = { name = it.take(30); error = null }, label = { Text("Name") },
                     singleLine = true, isError = error != null, shape = Radius.small,
