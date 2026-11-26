@@ -211,9 +211,12 @@ fun StatCard(value: String, label: String, icon: ImageVector, color: Color, modi
                 Icon(icon, null, Modifier.size(18.dp), tint = Color.White)
             }
             Spacer(Modifier.weight(1f))
+            // Long values such as "Today, 7:54 PM" shrink to fit the tile instead of being cut off.
+            var valueSize by remember(value) { mutableStateOf(26f) }
             Text(
                 value, color = fg, maxLines = 1, softWrap = false,
-                style = MaterialTheme.typography.headlineMedium.copy(fontSize = 26.sp, lineHeight = 30.sp)
+                style = MaterialTheme.typography.headlineMedium.copy(fontSize = valueSize.sp, lineHeight = (valueSize + 4f).sp),
+                onTextLayout = { if (it.didOverflowWidth && valueSize > 12f) valueSize -= 1f }
             )
             Text(label, style = MaterialTheme.typography.labelMedium, color = fg.copy(alpha = 0.75f), maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
