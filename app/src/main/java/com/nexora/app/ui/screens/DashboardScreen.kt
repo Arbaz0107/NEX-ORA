@@ -58,11 +58,8 @@ import com.nexora.app.data.LinkEntity
 import com.nexora.app.ui.components.AppMark
 import com.nexora.app.ui.components.BrandWordmark
 import com.nexora.app.ui.components.VideoGlyph
-import com.nexora.app.ui.components.rememberThumbnail
-import com.nexora.app.util.MediaLinks
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.ui.layout.ContentScale
 import com.nexora.app.ui.components.LocalNavBarClearance
 import com.nexora.app.ui.theme.Neon
 import com.nexora.app.util.Platform
@@ -230,8 +227,6 @@ private fun SectionRow(title: String, action: String? = null, onAction: () -> Un
 @Composable
 private fun ContinueCard(link: LinkEntity, color: Color, modifier: Modifier, onClick: () -> Unit) {
     val platform = Platform.fromKey(link.platform)
-    val isVideo = remember(link.url, link.platform) { MediaLinks.isVideo(platform, link.domain, link.url) }
-    val thumb = rememberThumbnail(link.normalizedUrl, isVideo)
     val shape = RoundedCornerShape(24.dp)
     Column(
         modifier
@@ -242,12 +237,8 @@ private fun ContinueCard(link: LinkEntity, color: Color, modifier: Modifier, onC
             .padding(8.dp)
     ) {
         Box(Modifier.fillMaxWidth().height(84.dp).clip(RoundedCornerShape(16.dp)).background(color)) {
-            if (thumb != null) {
-                androidx.compose.foundation.Image(thumb, contentDescription = "Video thumbnail", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            } else {
-                Canvas(Modifier.matchParentSize()) {
-                    drawCircle(Color.White.copy(alpha = 0.28f), radius = size.height * 0.55f, center = Offset(size.width * 0.85f, size.height * 0.15f))
-                }
+            Canvas(Modifier.matchParentSize()) {
+                drawCircle(Color.White.copy(alpha = 0.28f), radius = size.height * 0.55f, center = Offset(size.width * 0.85f, size.height * 0.15f))
             }
             Box(Modifier.align(Alignment.Center).size(36.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) {
                 Icon(if (platform in VIDEO_PLATFORMS) Icons.Filled.PlayArrow else Icons.Outlined.Link, null, Modifier.size(20.dp), tint = Neon.ink)
