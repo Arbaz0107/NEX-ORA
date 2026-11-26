@@ -80,6 +80,14 @@ fun NexoraApp(vm: MainViewModel, sharedSession: MutableState<Boolean>) {
     var searchSignal by remember { mutableIntStateOf(0) }
 
     fun goTab(r: String) {
+        if (r == "home") {
+            // Home is the bottom of the stack. Going back to it means popping everything above it. Navigating "to" it with
+            // saveState/restoreState could restore a stale copy of a screen opened from Home and leave Home unreachable.
+            if (!navController.popBackStack("home", false) && navController.currentDestination?.route != "home") {
+                navController.navigate("home") { launchSingleTop = true }
+            }
+            return
+        }
         navController.navigate(r) {
             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
             launchSingleTop = true
