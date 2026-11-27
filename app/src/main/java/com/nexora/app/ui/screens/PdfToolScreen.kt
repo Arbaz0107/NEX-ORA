@@ -60,7 +60,7 @@ private sealed interface Phase {
 private data class Options(
     val password: String, val splitMode: Int, val ranges: String, val allPages: Boolean, val pageSpec: String, val degrees: Int,
     val numPos: NumberPosition, val numStyle: NumberStyle, val numSize: Float, val numStart: Int, val numSkipFirst: Boolean,
-    val level: CompressLevel, val openPw: String, val ownerPw: String, val allowPrint: Boolean, val allowCopy: Boolean, val allowEdit: Boolean,
+    val level: CompressLevel, val targetKb: Int, val openPw: String, val ownerPw: String, val allowPrint: Boolean, val allowCopy: Boolean, val allowEdit: Boolean,
     val dpi: Int, val jpgQuality: Int, val zip: Boolean,
     val imgSize: ImagePageSize, val imgOrient: ImageOrientation, val imgMargin: ImageMargin
 )
@@ -97,6 +97,7 @@ fun PdfToolScreen(toolId: String, onBack: () -> Unit, onEdit: (String) -> Unit =
     var numStart by remember { mutableStateOf("1") }
     var numSkipFirst by remember { mutableStateOf(false) }
     var level by remember { mutableStateOf(CompressLevel.MEDIUM) }
+    var targetKb by remember { mutableStateOf("") }
     var openPw by remember { mutableStateOf("") }
     var confirmPw by remember { mutableStateOf("") }
     var ownerPw by remember { mutableStateOf("") }
@@ -159,7 +160,7 @@ fun PdfToolScreen(toolId: String, onBack: () -> Unit, onEdit: (String) -> Unit =
     fun run() {
         if (files.isEmpty() || phase is Phase.Running) return
         val o = Options(password, splitMode, ranges, allPages, pageSpec, degrees, numPos, numStyle, numSize, numStart.toIntOrNull() ?: 1, numSkipFirst,
-            level, openPw, ownerPw, allowPrint, allowCopy, allowEdit, dpi, jpgQuality, zip, imgSize, imgOrient, imgMargin)
+            level, targetKb.toIntOrNull() ?: 0, openPw, ownerPw, allowPrint, allowCopy, allowEdit, dpi, jpgQuality, zip, imgSize, imgOrient, imgMargin)
         if (tool == PdfTool.PROTECT) {
             if (openPw != confirmPw) { phase = Phase.Failed("The two passwords don't match."); return }
         }
@@ -303,6 +304,11 @@ fun PdfToolScreen(toolId: String, onBack: () -> Unit, onEdit: (String) -> Unit =
                         PdfTool.COMPRESS -> Section("Compression") {
                             Chips(CompressLevel.entries.map { it.label }, CompressLevel.entries.indexOf(level)) { level = CompressLevel.entries[it] }
                             Text(level.hint + ". Pictures are re-encoded; text stays sharp.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            OutlinedTextField(targetKb, { targetKb = it.filter(Char::isDigit).take(6) }, label = { Text("Or target size (KB)") },
+                                placeholder = { Text("e.g. 500") }, singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth(), shape = Radius.small)
+                            Text("Fill this to shrink as far as needed to reach that size. It overrides the level above. PDFs that are mostly text may not get that small.",
+                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         PdfTool.UNLOCK -> Text(
                             "Works only when you know the password or the file just has editing/printing limits. It makes an unlocked copy and never breaks real encryption.",
@@ -418,7 +424,10 @@ private fun execute(tool: PdfTool, pj: PdfJob, files: List<Picked>, name: String
             one(PdfEngine.rotate(pj, first.file, o.password, pages, o.degrees, name))
         }
         PdfTool.PAGE_NUMBERS -> one(PdfEngine.addPageNumbers(pj, first.file, o.password, o.numPos, o.numStyle, o.numSize, o.numStart, o.numSkipFirst, name))
-        PdfTool.COMPRESS -> one(PdfEngine.compress(pj, first.file, o.password, o.level, name))
+        PdfTool.COMPRESS -> if (o.targetKb > 0) {
+            val (f, ok) = PdfEngine.compressToTarget(pj, first.file, o.password, o.targetKb * 1024L, name)
+            PdfResult(listOf(f), if (ok) null else "Couldn't reach ${o.targetKb} KB. This is the smallest safe result (${fmtSize(f.length())}); the rest is text and fonts.")
+        } else one(PdfEngine.compress(pj, first.file, o.password, o.level, name))
         PdfTool.UNLOCK -> one(PdfEngine.unlock(pj, first.file, o.password, name))
         PdfTool.PROTECT -> one(PdfEngine.protect(pj, first.file, o.openPw, o.ownerPw, o.allowPrint, o.allowCopy, o.allowEdit, name))
         PdfTool.TO_WORD -> one(PdfText.toDocx(pj, first.file, o.password, name))
