@@ -269,42 +269,85 @@ object PdfEngine {
             for (i in 0 until total) {
                 job.check()
                 job.progress(i / total.toFloat(), "Compressing page ${i + 1} of $total")
-                recompress(doc, doc.getPage(i).resources, level, cache, 0)
+                recompress(doc, doc.getPage(i).resources, level.quality, level.scale, cache, 0)
             }
+            job.progress(0.95f, "Merging repeated fonts and images")
+            PdfOptimiser.run(doc)
             doc.save(out)
         }
         if (out.length() >= src.length()) {
             out.delete()
-            throw PdfProblem("This PDF is already well optimised, so no smaller copy could be made. Try a higher level.")
+            throw PdfProblem(
+                if (level == CompressLevel.HIGH) "This PDF is already as small as it can safely get. It is mostly text and fonts, which are already compact."
+                else "This PDF is already well optimised, so no smaller copy could be made. Try a higher level."
+            )
         }
         return out
     }
 
-    private fun recompress(doc: PDDocument, res: PDResources?, level: CompressLevel, cache: HashMap<COSStream, PDImageXObject?>, depth: Int) {
+    /**
+     * Tries gentler settings first and steps up until the file is at or under [targetBytes]. Keeps the smallest
+     * result that is still smaller than the source. Returns the file and whether the target was reached.
+     */
+    fun compressToTarget(job: PdfJob, src: File, password: String, targetBytes: Long, baseName: String): Pair<File, Boolean> {
+        if (src.length() <= targetBytes) throw PdfProblem("This PDF is already under that size.")
+        val ladder = listOf(0.85f to 1f, 0.6f to 0.75f, 0.4f to 0.5f, 0.3f to 0.38f, 0.25f to 0.28f, 0.2f to 0.2f)
+        val out = job.out("$baseName.pdf")
+        val tmp = File(out.parentFile, "$baseName.try.pdf")
+        var best: Long = Long.MAX_VALUE
+        var reached = false
+        for ((idx, step) in ladder.withIndex()) {
+            job.check()
+            job.progress(idx / ladder.size.toFloat(), "Trying to reach the size (${idx + 1} of ${ladder.size})")
+            open(src, password).use { doc ->
+                val cache = HashMap<COSStream, PDImageXObject?>()
+                for (i in 0 until doc.numberOfPages) {
+                    job.check()
+                    recompress(doc, doc.getPage(i).resources, step.first, step.second, cache, 0)
+                }
+                PdfOptimiser.run(doc)
+                doc.save(tmp)
+            }
+            val size = tmp.length()
+            if (size < best && size < src.length()) {
+                best = size
+                tmp.copyTo(out, overwrite = true)
+            }
+            tmp.delete()
+            if (best <= targetBytes) { reached = true; break }
+        }
+        if (best == Long.MAX_VALUE) {
+            out.delete()
+            throw PdfProblem("This PDF is already as small as it can safely get. It is mostly text and fonts, which are already compact.")
+        }
+        return out to reached
+    }
+
+    private fun recompress(doc: PDDocument, res: PDResources?, quality: Float, scale: Float, cache: HashMap<COSStream, PDImageXObject?>, depth: Int) {
         if (res == null) return
         for (name in res.xObjectNames) {
             val x = try { res.getXObject(name) } catch (e: Exception) { continue }
             when {
                 x is PDImageXObject -> {
                     val key = x.cosObject
-                    val replacement = if (cache.containsKey(key)) cache[key] else smaller(doc, x, level).also { cache[key] = it }
+                    val replacement = if (cache.containsKey(key)) cache[key] else smaller(doc, x, quality, scale).also { cache[key] = it }
                     if (replacement != null) res.put(name, replacement)
                 }
-                x is PDFormXObject && depth < 3 -> recompress(doc, x.resources, level, cache, depth + 1)
+                x is PDFormXObject && depth < 3 -> recompress(doc, x.resources, quality, scale, cache, depth + 1)
             }
         }
     }
 
-    private fun smaller(doc: PDDocument, img: PDImageXObject, level: CompressLevel): PDImageXObject? {
+    private fun smaller(doc: PDDocument, img: PDImageXObject, quality: Float, scale: Float): PDImageXObject? {
         try {
             if (img.isStencil || img.softMask != null || img.mask != null) return null   // keep transparency intact
             if (img.width.toLong() * img.height < 40_000) return null
             val original = img.image ?: return null
             var bmp = original
-            if (level.scale < 1f) {
-                bmp = Bitmap.createScaledBitmap(original, maxOf(1, (original.width * level.scale).toInt()), maxOf(1, (original.height * level.scale).toInt()), true)
+            if (scale < 1f) {
+                bmp = Bitmap.createScaledBitmap(original, maxOf(1, (original.width * scale).toInt()), maxOf(1, (original.height * scale).toInt()), true)
             }
-            val fresh = JPEGFactory.createFromImage(doc, bmp, level.quality)
+            val fresh = JPEGFactory.createFromImage(doc, bmp, quality)
             val before = img.cosObject.getInt(COSName.LENGTH)
             val after = fresh.cosObject.getInt(COSName.LENGTH)
             return if (after in 1 until before) fresh else null
